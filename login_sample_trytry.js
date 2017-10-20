@@ -3,6 +3,20 @@ var express = require('express');
  var bodyParser=require('body-parser');
  var MySQLStore = require('express-mysql-session')(session);
  var mysql=require('mysql');
+ var multer  = require('multer');
+ /*
+ var _storage = multer.diskStorage({      //객체
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname);
+  }
+});
+*/
+
+var upload = multer({ dest: 'uploads/' })
+  var fs=require('fs');
  var bkfd2Password = require("pbkdf2-password");
 var passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
@@ -17,6 +31,14 @@ var hasher = bkfd2Password();
 
  var app = express();
   app.use(bodyParser.urlencoded({ extended: false }));
+  app.set('views','./views_file');
+  app.set('view engine','jade');
+  app.get('/upload',function(req,res){
+    res.render('upload');
+  });
+  app.post('/upload',upload.single('userfile'),function(req,res){
+    res.send('Uploaded : '+req.file.filename);
+  });
   app.use(session({
     secret: '1234DSFs@adf1234!@#$asd',
     resave: false,
@@ -29,6 +51,11 @@ var hasher = bkfd2Password();
       database:'TestLOGIN'
     })
   }));
+
+
+  app.get('/upload',function(req, res){
+    res.render('uploadform');
+  });
  app.get('/count', function(req, res){
    if(req.session.count) {
      req.session.count++;
@@ -99,24 +126,37 @@ passport.serializeUser(function(user, done) {
  ));
  */
 ///
+
 app.post('/auth/login', function(req, res){
     var uname = req.body.id;
     var pwd = req.body.password;
 
    var sql = 'SELECT * FROM login WHERE id=?';
+
    conn.query(sql, [uname], function(err, results){
+     //var user = results[0];
      if(err){
-       res.send('No Data <a href="/auth/login">login</a>');
+       res.send('query fail <a href="/auth/login">login</a>');
+
+       //return done('There is no user.');
       }
-     var user = results[0];
-     //return hasher({password:pwd}, function(err, pass, hash){
-       if(pwd === user.password){
-         console.log('LocalStrategy', user);
-         req.session.displayName = user.name;
-          res.redirect('/welcome'); ///////////////////////
-       } else {
-         res.send('No Data <a href="/auth/login">login</a>');
-       }
+      var user = results[0];
+      if(user==null){
+        res.send('No User <a href="/auth/login">login</a>');
+      }
+      else {
+           //var user = results[0];
+        //return hasher({password:pwd}, function(err, pass, hash){
+
+          if(pwd == user.password){    //user.password
+            console.log('LocalStrategy', user);
+            req.session.displayName = user.name; //user.name
+             res.redirect('/welcome'); ///////////////////////
+          } else {
+            res.send('Wrong password! <a href="/auth/login">login</a>');
+          }
+      }
+
      });
    });
 
@@ -138,16 +178,56 @@ app.get('/auth/login', function(req, res){
   res.send(output);
 });
 
-app.post('/auth/join', function(req, res){
+/*  upload
+app.get('/upload',function(req,res){
+  res.render('upload');
+});
+app.post('/upload',upload.single('userfile'),function(req,res){
+  res.send('Uploaded : '+req.file.filename);
+});
+app.use(session({
+  secret: '1234DSFs@adf1234!@#$asd',
+  resave: false,
+  saveUninitialized: true,
+  store:new MySQLStore({
+    host:'localhost',
+    port:3306,
+    user:'root',
+    password:'111111',
+    database:'TestLOGIN'
+  })
+}));
+
+
+app.get('/upload',function(req, res){
+  res.render('uploadform');
+});
+*/
+
+
+
+app.post('/auth/join', upload.single('userfile'), function(req, res){
 //  hasher({password:req.body.password}, function(err, pass, salt, hash){
+console.log(req.file);
+console.log(req.file.filename);
+var fname=req.file.filename;
+var floc=req.file.destination;
     var user = {
       id:req.body.id,
       //password:hash,
       password:req.body.password,
       name:req.body.username,
       Email:req.body.email,
-      phone:req.body.phone
+      phone:req.body.phone,
+      //file_name:req.body.userfile,
+      //file_location:req.body.userfile
+      file_name:fname,
+      file_location:floc
     };
+
+    //console.log(req.body.userfile);
+    //console.log(req.file.originalname);
+    //console.log(req.body.userfile.destination);
     var sql = 'INSERT INTO login SET ?';
     conn.query(sql, user, function(err, results){
       if(err){
@@ -165,10 +245,11 @@ app.post('/auth/join', function(req, res){
     // });
 //  });
 });
+
 app.get('/auth/join', function(req, res){
   var output = `
   <h1>Join</h1>
-  <form action="/auth/join" method="post">
+  <form action="/auth/join" method="post" enctype="multipart/form-data">
     <p>
       <input type="text" name="id" placeholder="id">
     </p>
@@ -181,6 +262,11 @@ app.get('/auth/join', function(req, res){
     <input type="text" name="email" placeholder="email">
   </p>
   <input type="text" name="phone" placeholder="phone">
+</p>
+</p>
+<h5>image :
+<input type="file" name="userfile" placeholder="userfile" >
+</h5>
 </p>
     <p>
       <input type="submit" value="submit">
